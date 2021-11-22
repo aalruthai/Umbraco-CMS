@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -123,7 +124,7 @@ namespace Umbraco.Web.PropertyEditors
                 if (blockEditorData == null)
                     return string.Empty;
 
-                foreach (var row in blockEditorData.BlockValue.ContentData)
+                foreach (var row in blockEditorData.BlockValue.ContentData.Concat(blockEditorData.BlockValue.SettingsData))
                 {
                     foreach (var prop in row.PropertyValues)
                     {
@@ -139,7 +140,7 @@ namespace Umbraco.Web.PropertyEditors
                             // NOTE: This logic was borrowed from Nested Content and I'm unsure why it exists.
                             // if the property editor doesn't exist I think everything will break anyways?
                             // update the raw value since this is what will get serialized out
-                            row.RawPropertyValues[prop.Key] = tempProp.GetValue()?.ToString();
+                            row.RawPropertyValues[prop.Key] = tempProp.GetValue();
                             continue;
                         }
 
@@ -195,10 +196,10 @@ namespace Umbraco.Web.PropertyEditors
                     return string.Empty;
                 }
 
-                if (blockEditorData == null || blockEditorData.BlockValue.ContentData.Count == 0)
+                if (blockEditorData == null)
                     return string.Empty;
 
-                foreach (var row in blockEditorData.BlockValue.ContentData)
+                foreach (var row in blockEditorData.BlockValue.ContentData.Concat(blockEditorData.BlockValue.SettingsData))
                 {
                     foreach (var prop in row.PropertyValues)
                     {
@@ -221,7 +222,7 @@ namespace Umbraco.Web.PropertyEditors
                 }
 
                 // return json
-                return JsonConvert.SerializeObject(blockEditorData.BlockValue);
+                return blockEditorData.BlockValue;
             }
 
             #endregion
@@ -351,10 +352,12 @@ namespace Umbraco.Web.PropertyEditors
 
             public BlockEditorData DeserializeAndClean(object propertyValue)
             {
-                if (propertyValue == null || string.IsNullOrWhiteSpace(propertyValue.ToString()))
+                if (propertyValue == null)
                     return null;
 
-                var blockEditorData = _dataConverter.Deserialize(propertyValue.ToString());
+                var blockEditorData = propertyValue is JToken json ?
+                    _dataConverter.ConvertFrom(json) :
+                    _dataConverter.Deserialize(propertyValue.ToString());
 
                 if (blockEditorData.BlockValue.ContentData.Count == 0)
                 {
@@ -370,6 +373,7 @@ namespace Umbraco.Web.PropertyEditors
                 {
                     ResolveBlockItemData(block, contentTypePropertyTypes);
                 }
+
                 // filter out any settings that isn't referenced in the layout references
                 foreach (var block in blockEditorData.BlockValue.SettingsData.Where(x => blockEditorData.References.Any(r => r.SettingsUdi == x.Udi)))
                 {
