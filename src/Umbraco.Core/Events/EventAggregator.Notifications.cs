@@ -112,14 +112,12 @@ namespace Umbraco.Cms.Core.Events
         /// Moving forwards (v10) it probably makes more sense to register EventAggregator scoped and create a scope as required in singletons that wish to publish notifications.
         /// But doing so now would mean an awful lot of service location to avoid breaking changes.
         /// <br/>
-        /// For v9 we can do the next best thing which is to try use the HttpContextAccessor service provider (scoped per request) when available,
-        /// and fallback creating a service scope otherwise.
+        /// For v9 we can do the next best thing which is to create a scope for each published notification, thus enabling the transient handlers to take a dependency on a scoped service.
         /// </para>
         ///
         /// <para>
-        /// This is a slight improvement as we can depend on scoped services in a handler without service location and that scope is shared between publisher and subscriber during lifetime of a http request.
-        /// However it isn't perfect, if a background thread creates a service scope and uses it to resolve an event aggregator and publish a notification
-        /// that scope will not be the same scope that handlers are resolved from, so it is impossible to share scoped state between publisher and subscriber.
+        /// Did discuss using HttpContextAccessor/IScopedServiceProvider to enable sharing of scopes when publisher has http context,
+        /// but decided against because it's inconsistent with what happens in background threads and will just cause confusion.
         /// </para>
         /// </remarks>
         public override Task HandleAsync(
@@ -128,15 +126,11 @@ namespace Umbraco.Cms.Core.Events
             ServiceFactory serviceFactory,
             Func<IEnumerable<Func<INotification, CancellationToken, Task>>, INotification, CancellationToken, Task> publish)
         {
-            // Try get a scoped service provider from HttpContextAccessor, we will use this if present.
-            IScopedServiceProvider scopedServiceProvider = serviceFactory.GetInstance<IScopedServiceProvider>();
-
-            // As a fallback, create a new service scope and ensure it's disposed when it goes out of scope.
+            // Create a new service scope from which to resolve handlers and ensure it's disposed when it goes out of scope.
+            // TODO: v10 - go back to using ServiceFactory to resolve
             IServiceScopeFactory scopeFactory = serviceFactory.GetInstance<IServiceScopeFactory>();
             using IServiceScope scope = scopeFactory.CreateScope();
-
-            // Use best service provider available for resolving handlers.
-            IServiceProvider container = scopedServiceProvider.ServiceProvider ?? scope.ServiceProvider;
+            IServiceProvider container = scope.ServiceProvider;
 
             IEnumerable<Func<INotification, CancellationToken, Task>> handlers = container
                 .GetServices<INotificationAsyncHandler<TNotification>>()
@@ -160,15 +154,11 @@ namespace Umbraco.Cms.Core.Events
             ServiceFactory serviceFactory,
             Action<IEnumerable<Action<INotification>>, INotification> publish)
         {
-            // Try get a scoped service provider from HttpContextAccessor, we will use this if present.
-            IScopedServiceProvider scopedServiceProvider = serviceFactory.GetInstance<IScopedServiceProvider>();
-
-            // As a fallback, create a new service scope and ensure it's disposed when it goes out of scope.
+            // Create a new service scope from which to resolve handlers and ensure it's disposed when it goes out of scope.
+            // TODO: v10 - go back to using ServiceFactory to resolve
             IServiceScopeFactory scopeFactory = serviceFactory.GetInstance<IServiceScopeFactory>();
             using IServiceScope scope = scopeFactory.CreateScope();
-
-            // Use best service provider available for resolving handlers.
-            IServiceProvider container = scopedServiceProvider.ServiceProvider ?? scope.ServiceProvider;
+            IServiceProvider container = scope.ServiceProvider;
 
             IEnumerable<Action<INotification>> handlers = container
                 .GetServices<INotificationHandler<TNotification>>()

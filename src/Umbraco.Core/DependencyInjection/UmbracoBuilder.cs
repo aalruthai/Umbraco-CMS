@@ -129,6 +129,7 @@ namespace Umbraco.Cms.Core.DependencyInjection
             Services.AddSingleton(Profiler);
 
             // Register as singleton to allow injection everywhere.
+            // TODO: v10, scoped with workaround for publishing in singletons.
             Services.AddSingleton<ServiceFactory>(p => p.GetService);
             Services.AddSingleton<IEventAggregator, EventAggregator>();
 
